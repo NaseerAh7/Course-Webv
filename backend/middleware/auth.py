@@ -7,19 +7,30 @@ import os
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from pathlib import Path
 
 import jwt
 from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(Path(__file__).parent.parent / '.env')
 
 logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 
-# Load configuration from environment
-JWT_SECRET = os.environ.get('JWT_SECRET')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_DAYS = 7  # Default expiration
+
+def get_jwt_secret() -> str:
+    """Get JWT_SECRET from environment with validation."""
+    secret = os.environ.get('JWT_SECRET')
+    if not secret:
+        logger.error("JWT_SECRET not configured in environment")
+        raise RuntimeError("JWT_SECRET not configured")
+    return secret
 
 def get_jwt_expire_days() -> int:
     """Parse JWT_EXPIRE environment variable."""
@@ -43,9 +54,7 @@ def create_access_token(data: dict) -> str:
     Returns:
         Encoded JWT token string
     """
-    if not JWT_SECRET:
-        logger.error("JWT_SECRET not configured")
-        raise RuntimeError("JWT_SECRET not configured")
+    jwt_secret = get_jwt_secret()
     
     to_encode = data.copy()
     expire_days = get_jwt_expire_days()
@@ -55,7 +64,7 @@ def create_access_token(data: dict) -> str:
         "iat": datetime.now(timezone.utc)
     })
     
-    encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, jwt_secret, algorithm=JWT_ALGORITHM)
     logger.debug(f"Created token for user: {data.get('email')}")
     return encoded_jwt
 
@@ -72,12 +81,13 @@ def decode_token(token: str) -> dict:
     Raises:
         HTTPException: If token is invalid or expired
     """
-    if not JWT_SECRET:
-        logger.error("JWT_SECRET not configured")
+    try:
+        jwt_secret = get_jwt_secret()
+    except RuntimeError:
         raise HTTPException(status_code=500, detail="Authentication service not configured")
     
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, jwt_secret, algorithms=[JWT_ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
         logger.warning("Token expired")
