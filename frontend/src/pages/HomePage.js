@@ -225,7 +225,7 @@ const HomePage = () => {
                                 <Link 
                                     to={`/course/${course.id}`} 
                                     key={course.id}
-                                    className="animate-fade-in"
+                                    className="animate-fade-in block"
                                     style={{ animationDelay: `${index * 50}ms` }}
                                     data-testid={`course-card-${course.id}`}
                                 >
